@@ -1,4 +1,3 @@
-
 import numpy as np
 import scipy.sparse as sparse
 import sympy as sp
@@ -349,6 +348,9 @@ class DirichletLegendre(Composite, Legendre):
         if sympy:
             return sp.legendre(j, x) - sp.legendre(j + 2, x)
         return Leg.basis(j) - Leg.basis(j + 2)
+    
+    def derivative_basis_function(self, j, k=1):
+        return (Leg.basis(j).deriv(k)) - (Leg.basis(j + 2).deriv(k))
 
 
 class NeumannLegendre(Composite, Legendre):
@@ -356,30 +358,32 @@ class NeumannLegendre(Composite, Legendre):
         Legendre.__init__(self, N, domain=domain)
         self.B = Neumann(bc, domain, self.reference_domain)
 
-        rows = []
-        cols = []
-        data = []
+        rows, cols, data = [], [], []
         for j in range(N + 1):
-            Aj   = j * (j + 1) / 2.0
-            Aj4  = (j + 4) * (j + 5) / 2.0
-            alpha = Aj / Aj4
-            rows.append(j); cols.append(j);     data.append(1.0)
-            rows.append(j); cols.append(j + 4); data.append(-alpha)
-
-        self.S = sparse.coo_matrix((data, (rows, cols)), shape=(N + 1, N + 5)).tocsr()
+            alpha = (j * (j + 1)) / ((j + 2) * (j + 3))
+            rows += [j, j]
+            cols += [j, j + 2]
+            data += [1.0, -alpha]
+        self.S = sparse.coo_matrix((data, (rows, cols)),
+                                   shape=(N + 1, N + 3)).tocsr()
 
     def basis_function(self, j, sympy=False):
-        Aj   = j * (j + 1) / 2.0
-        Aj4  = (j + 4) * (j + 5) / 2.0
-        alpha = Aj / Aj4
         if sympy:
-            return sp.legendre(j, x) - alpha * sp.legendre(j + 4, x)
-        return Leg.basis(j) - alpha * Leg.basis(j + 4)
+            alpha = (j * (j + 1)) / ((j + 2) * (j + 3))
+            return sp.legendre(j, x) - alpha * sp.legendre(j + 2, x)
+        alpha = (j * (j + 1)) / ((j + 2) * (j + 3))
+        return Leg.basis(j) - alpha * Leg.basis(j + 2)
+
+    def derivative_basis_function(self, j, k=1):
+        alpha = (j * (j + 1)) / ((j + 2) * (j + 3))
+        return Leg.basis(j).deriv(k) - alpha * Leg.basis(j + 2).deriv(k)
 
     def mass_matrix(self):
-        diag = Legendre(self.N + 4, domain=self.domain).L2_norm_sq(self.N + 5)
-        M = sparse.diags([diag], [0], shape=(self.N + 5, self.N + 5), format="csr")
+        diag = Legendre(self.N + 2, domain=self.domain).L2_norm_sq(self.N + 3)
+        M = sparse.diags([diag], [0], shape=(self.N + 3, self.N + 3), format="csr")
         return self.S @ M @ self.S.T
+
+
 
 
 
@@ -393,6 +397,9 @@ class DirichletChebyshev(Composite, Chebyshev):
         if sympy:
             return sp.cos(j * sp.acos(x)) - sp.cos((j + 2) * sp.acos(x))
         return Cheb.basis(j) - Cheb.basis(j + 2)
+    
+    def derivative_basis_function(self, j, k=1):
+        return (Cheb.basis(j).deriv(k)) - (Cheb.basis(j + 2).deriv(k))
 
 
 class NeumannChebyshev(Composite, Chebyshev):
@@ -400,23 +407,32 @@ class NeumannChebyshev(Composite, Chebyshev):
         Chebyshev.__init__(self, N, domain=domain)
         self.B = Neumann(bc, domain, self.reference_domain)
 
+
         rows, cols, data = [], [], []
         for j in range(N + 1):
-            beta = (j ** 2) / ((j + 4) ** 2) if j + 4 > 0 else 0.0
-            rows.append(j); cols.append(j);     data.append(1.0)
-            rows.append(j); cols.append(j + 4); data.append(-beta)
-        self.S = sparse.coo_matrix((data, (rows, cols)), shape=(N + 1, N + 5)).tocsr()
+            beta = (j / (j + 2))**2 if j + 2 > 0 else 0.0
+            rows += [j, j]
+            cols += [j, j + 2]
+            data += [1.0, -beta]
+        self.S = sparse.coo_matrix((data, (rows, cols)),
+                                   shape=(N + 1, N + 3)).tocsr()
 
     def basis_function(self, j, sympy=False):
-        beta = (j ** 2) / ((j + 4) ** 2) if j + 4 > 0 else 0.0
         if sympy:
-            return sp.cos(j * sp.acos(x)) - beta * sp.cos((j + 4) * sp.acos(x))
-        return Cheb.basis(j) - beta * Cheb.basis(j + 4)
+            beta = (j**2) / ((j + 2)**2)
+            return sp.cos(j * sp.acos(x)) - beta * sp.cos((j + 2) * sp.acos(x))
+        beta = (j / (j + 2))**2 if j + 2 > 0 else 0.0
+        return Cheb.basis(j) - beta * Cheb.basis(j + 2)
+
+    def derivative_basis_function(self, j, k=1):
+        beta = (j / (j + 2))**2 if j + 2 > 0 else 0.0
+        return Cheb.basis(j).deriv(k) - beta * Cheb.basis(j + 2).deriv(k)
 
     def mass_matrix(self):
-        diag = Chebyshev(self.N + 4, domain=self.domain).L2_norm_sq(self.N + 5)
-        M = sparse.diags([diag], [0], shape=(self.N + 5, self.N + 5), format="csr")
+        diag = Chebyshev(self.N + 2, domain=self.domain).L2_norm_sq(self.N + 3)
+        M = sparse.diags([diag], [0], shape=(self.N + 3, self.N + 3), format="csr")
         return self.S @ M @ self.S.T
+
 
 
 
